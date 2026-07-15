@@ -45,7 +45,8 @@ function createProject(
 
     require(msg.value >= launchFee, "Launch fee not paid");
 
-    payable(treasury).transfer(msg.value);
+    (bool success, ) = payable(treasury).call{value: msg.value}("");
+require(success, "Treasury transfer failed");
 
     totalProjects++;
 
