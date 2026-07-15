@@ -36,4 +36,35 @@ contract PolyLaunchFactory {
         launchFee = _launchFee;
         totalProjects = 0;
     }
+
+function createProject(
+    string memory _name,
+    string memory _symbol,
+    uint256 _totalSupply
+) public payable {
+
+    require(msg.value >= launchFee, "Launch fee not paid");
+
+    payable(treasury).transfer(msg.value);
+
+    totalProjects++;
+
+    projects[totalProjects] = Project({
+        id: totalProjects,
+        creator: msg.sender,
+        tokenAddress: address(0),
+        name: _name,
+        symbol: _symbol,
+        totalSupply: _totalSupply,
+        graduated: false,
+        createdAt: block.timestamp
+    });
+
+    emit ProjectCreated(
+        totalProjects,
+        msg.sender,
+        address(0),
+        _name,
+        _symbol
+    );
 }
