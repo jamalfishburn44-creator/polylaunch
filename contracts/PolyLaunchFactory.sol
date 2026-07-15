@@ -44,7 +44,9 @@ function createProject(
 ) public payable {
 
     require(msg.value >= launchFee, "Launch fee not paid");
-
+require(bytes(_name).length > 0, "Token name required");
+require(bytes(_symbol).length > 0, "Token symbol required");
+require(_totalSupply > 0, "Supply must be greater than zero");
     (bool success, ) = payable(treasury).call{value: msg.value}("");
 require(success, "Treasury transfer failed");
 
