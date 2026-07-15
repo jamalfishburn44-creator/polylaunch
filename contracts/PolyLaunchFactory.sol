@@ -68,3 +68,4 @@ function createProject(
         _symbol
     );
 }
+}
