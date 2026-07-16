@@ -74,3 +74,36 @@ section{
     margin:auto;
     padding:40px 20px;
 }
+.launch-form{
+    max-width:700px;
+    margin:60px auto;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    background:#1e293b;
+    padding:40px;
+    border-radius:16px;
+}
+
+.launch-form input,
+.launch-form textarea{
+    padding:15px;
+    border:none;
+    border-radius:10px;
+    background:#334155;
+    color:white;
+    font-size:16px;
+}
+
+.launch-form textarea{
+    min-height:120px;
+    resize:vertical;
+}
+
+.launch-form h2{
+    text-align:center;
+}
+
+.launch-form label{
+    font-weight:bold;
+}
