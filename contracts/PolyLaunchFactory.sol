@@ -60,10 +60,7 @@ event Debug(string step);
         require(bytes(_symbol).length > 0, "Symbol required");
         require(_supply > 0, "Invalid supply");
 
-        require(msg.value >= launchFee, "Launch fee not paid");
-require(bytes(_name).length > 0, "Name required");
-require(bytes(_symbol).length > 0, "Symbol required");
-require(_supply > 0, "Invalid supply");
+        
 
 emit Debug("Passed requires");
 
