@@ -67,7 +67,8 @@ require(_supply > 0, "Invalid supply");
 
 emit Debug("Passed requires");
 
-payable(treasury).transfer(msg.value);
+(bool success, ) = payable(treasury).call{value: msg.value}("");
+require(success, "Treasury transfer failed");
 
 emit Debug("Transfer complete");
 
