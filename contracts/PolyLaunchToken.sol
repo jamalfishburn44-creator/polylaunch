@@ -46,17 +46,17 @@ event Approval(
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {
-        require(to != address(0), "Invalid address");
-        require(balanceOf[msg.sender] >= amount, "Insufficient balance");
+    require(to != address(0), "Invalid address");
+    require(balanceOf[msg.sender] >= amount, "Insufficient balance");
 
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
+    balanceOf[msg.sender] -= amount;
+    balanceOf[to] += amount;
 
-        emit Transfer(msg.sender, to, amount);
+    emit Transfer(msg.sender, to, amount);
 
-        return true;
-    }
+    return true;
 }
+
 function approve(address spender, uint256 amount)
     external
     returns (bool)
