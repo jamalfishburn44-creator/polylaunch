@@ -29,7 +29,7 @@ contract PolyLaunchFactory {
         string name,
         string symbol
     );
-
+event Debug(string step);
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
