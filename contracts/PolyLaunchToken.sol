@@ -57,3 +57,15 @@ event Approval(
         return true;
     }
 }
+function approve(address spender, uint256 amount)
+    external
+    returns (bool)
+{
+    require(spender != address(0), "Invalid address");
+
+    allowance[msg.sender][spender] = amount;
+
+    emit Approval(msg.sender, spender, amount);
+
+    return true;
+}
