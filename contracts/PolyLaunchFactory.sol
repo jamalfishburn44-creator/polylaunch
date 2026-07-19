@@ -23,12 +23,13 @@ contract PolyLaunchFactory {
     mapping(uint256 => Project) public projects;
 
     event ProjectCreated(
-        uint256 indexed projectId,
-        address indexed creator,
-        address token,
-        string name,
-        string symbol
-    );
+    uint256 indexed projectId,
+    address indexed creator,
+    address token,
+    string name,
+    string symbol
+);
+
 event Debug(string step);
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
