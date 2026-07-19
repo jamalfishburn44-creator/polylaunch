@@ -69,3 +69,4 @@ function approve(address spender, uint256 amount)
 
     return true;
 }
+}
