@@ -13,7 +13,15 @@ contract PolyLaunchToken {
 
     mapping(address => uint256) public balanceOf;
 
-    event Transfer(address indexed from, address indexed to, uint256 value);
+mapping(address => mapping(address => uint256)) public allowance;
+
+event Transfer(address indexed from, address indexed to, uint256 value);
+
+event Approval(
+    address indexed owner,
+    address indexed spender,
+    uint256 value
+);
 
     modifier onlyFactory() {
         require(msg.sender == factory, "Only factory");
