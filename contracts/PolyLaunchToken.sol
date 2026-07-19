@@ -12,16 +12,19 @@ contract PolyLaunchToken {
     address public creator;
 
     mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
 
-mapping(address => mapping(address => uint256)) public allowance;
+    event Transfer(
+        address indexed from,
+        address indexed to,
+        uint256 value
+    );
 
-event Transfer(address indexed from, address indexed to, uint256 value);
-
-event Approval(
-    address indexed owner,
-    address indexed spender,
-    uint256 value
-);
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
 
     modifier onlyFactory() {
         require(msg.sender == factory, "Only factory");
@@ -45,28 +48,53 @@ event Approval(
         emit Transfer(address(0), _creator, _supply);
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
-    require(to != address(0), "Invalid address");
-    require(balanceOf[msg.sender] >= amount, "Insufficient balance");
+    function transfer(address to, uint256 amount)
+        external
+        returns (bool)
+    {
+        require(to != address(0), "Invalid address");
+        require(balanceOf[msg.sender] >= amount, "Insufficient balance");
 
-    balanceOf[msg.sender] -= amount;
-    balanceOf[to] += amount;
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
 
-    emit Transfer(msg.sender, to, amount);
+        emit Transfer(msg.sender, to, amount);
 
-    return true;
-}
+        return true;
+    }
 
-function approve(address spender, uint256 amount)
-    external
-    returns (bool)
-{
-    require(spender != address(0), "Invalid address");
+    function approve(address spender, uint256 amount)
+        external
+        returns (bool)
+    {
+        require(spender != address(0), "Invalid address");
 
-    allowance[msg.sender][spender] = amount;
+        allowance[msg.sender][spender] = amount;
 
-    emit Approval(msg.sender, spender, amount);
+        emit Approval(msg.sender, spender, amount);
 
-    return true;
-}
+        return true;
+    }
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool) {
+        require(to != address(0), "Invalid address");
+        require(balanceOf[from] >= amount, "Insufficient balance");
+        require(
+            allowance[from][msg.sender] >= amount,
+            "Allowance exceeded"
+        );
+
+        allowance[from][msg.sender] -= amount;
+
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+
+        emit Transfer(from, to, amount);
+
+        return true;
+    }
 }
