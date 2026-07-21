@@ -36,22 +36,29 @@ contract PolyLaunchToken {
         string memory _name,
         string memory _symbol,
         uint256 _supply,
-        address _creator,
-        address _bondingCurve
+        address _creator
     ) {
         name = _name;
         symbol = _symbol;
 
         creator = _creator;
         factory = msg.sender;
-        bondingCurve = _bondingCurve;
 
         totalSupply = _supply;
 
-        // Mint entire supply to the Bonding Curve
-        balanceOf[_bondingCurve] = _supply;
+        // Mint to the factory first
+        balanceOf[factory] = _supply;
 
-        emit Transfer(address(0), _bondingCurve, _supply);
+        emit Transfer(address(0), factory, _supply);
+    }
+
+    function setBondingCurve(address _bondingCurve)
+        external
+        onlyFactory
+    {
+        require(bondingCurve == address(0), "Already set");
+
+        bondingCurve = _bondingCurve;
     }
 
     function transfer(address to, uint256 amount)
