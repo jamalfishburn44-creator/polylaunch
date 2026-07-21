@@ -10,6 +10,7 @@ contract PolyLaunchToken {
 
     address public factory;
     address public creator;
+    address public bondingCurve;
 
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -35,17 +36,22 @@ contract PolyLaunchToken {
         string memory _name,
         string memory _symbol,
         uint256 _supply,
-        address _creator
+        address _creator,
+        address _bondingCurve
     ) {
         name = _name;
         symbol = _symbol;
+
         creator = _creator;
         factory = msg.sender;
+        bondingCurve = _bondingCurve;
 
         totalSupply = _supply;
-        balanceOf[_creator] = _supply;
 
-        emit Transfer(address(0), _creator, _supply);
+        // Mint entire supply to the Bonding Curve
+        balanceOf[_bondingCurve] = _supply;
+
+        emit Transfer(address(0), _bondingCurve, _supply);
     }
 
     function transfer(address to, uint256 amount)
@@ -89,7 +95,6 @@ contract PolyLaunchToken {
         );
 
         allowance[from][msg.sender] -= amount;
-
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
 
