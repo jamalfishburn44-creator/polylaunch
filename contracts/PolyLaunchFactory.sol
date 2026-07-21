@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import "./PolyLaunchToken.sol";
-import "./BondingCurve.sol";
 
 contract PolyLaunchFactory {
 
@@ -11,14 +10,9 @@ contract PolyLaunchFactory {
     uint256 public launchFee;
     uint256 public totalProjects;
 
-    uint256 public constant STARTING_PRICE = 1e15;      // 0.001 POL
-    uint256 public constant PRICE_INCREMENT = 1e12;     // 0.000001 POL
-    uint256 public constant GRADUATION_TARGET = 1000 ether;
-
     struct Project {
         address creator;
         address token;
-        address bondingCurve;
         string name;
         string symbol;
         uint256 supply;
@@ -32,7 +26,6 @@ contract PolyLaunchFactory {
         uint256 indexed projectId,
         address indexed creator,
         address token,
-        address bondingCurve,
         string name,
         string symbol
     );
@@ -48,6 +41,14 @@ contract PolyLaunchFactory {
         launchFee = _launchFee;
     }
 
+    function setLaunchFee(uint256 _newFee) external onlyOwner {
+        launchFee = _newFee;
+    }
+
+    function setTreasury(address _newTreasury) external onlyOwner {
+        treasury = _newTreasury;
+    }
+
     function createProject(
         string memory _name,
         string memory _symbol,
@@ -59,8 +60,7 @@ contract PolyLaunchFactory {
         require(bytes(_symbol).length > 0, "Symbol required");
         require(_supply > 0, "Invalid supply");
 
-        (bool success,) = payable(treasury).call{value: msg.value}("");
-        require(success, "Treasury transfer failed");
+        payable(treasury).transfer(msg.value);
 
         PolyLaunchToken token = new PolyLaunchToken(
             _name,
@@ -69,25 +69,11 @@ contract PolyLaunchFactory {
             msg.sender
         );
 
-        BondingCurve curve = new BondingCurve(
-            address(this),
-            msg.sender,
-            address(token),
-            STARTING_PRICE,
-            PRICE_INCREMENT,
-            GRADUATION_TARGET
-        );
-
-        token.setBondingCurve(address(curve));
-
-        token.transfer(address(curve), _supply);
-
         totalProjects++;
 
         projects[totalProjects] = Project({
             creator: msg.sender,
             token: address(token),
-            bondingCurve: address(curve),
             name: _name,
             symbol: _symbol,
             supply: _supply,
@@ -99,17 +85,8 @@ contract PolyLaunchFactory {
             totalProjects,
             msg.sender,
             address(token),
-            address(curve),
             _name,
             _symbol
         );
-    }
-
-    function setLaunchFee(uint256 _newFee) external onlyOwner {
-        launchFee = _newFee;
-    }
-
-    function setTreasury(address _newTreasury) external onlyOwner {
-        treasury = _newTreasury;
     }
 }
