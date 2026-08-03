@@ -1,0 +1,77 @@
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+body{
+  background:#0b1020;
+  color:white;
+  font-family:Arial,Helvetica,sans-serif;
+}
+
+.app{
+  min-height:100vh;
+}
+
+.navbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:20px;
+  border-bottom:1px solid #222;
+}
+
+.connect{
+  background:#8b5cf6;
+  color:white;
+  border:none;
+  padding:12px 20px;
+  border-radius:12px;
+  font-weight:bold;
+}
+
+.launch-container{
+  max-width:700px;
+  margin:40px auto;
+  padding:20px;
+}
+
+.launch-container h1{
+    text-align:center;
+    font-size:clamp(2.4rem, 8vw, 4rem);
+    line-height:1.1;
+    margin-bottom:30px;
+}
+
+.launch-container input,
+.launch-container textarea{
+  width:100%;
+  background:#1b2238;
+  color:white;
+  border:1px solid #333;
+  border-radius:12px;
+  padding:16px;
+  margin-bottom:16px;
+  font-size:16px;
+}
+
+.launch-container textarea{
+  resize:none;
+}
+
+.launchButton{
+  width:100%;
+  background:#8b5cf6;
+  color:white;
+  border:none;
+  padding:18px;
+  border-radius:14px;
+  font-size:20px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.launchButton:hover{
+  background:#7c3aed;
+}
