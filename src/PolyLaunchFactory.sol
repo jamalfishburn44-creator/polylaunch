@@ -3,12 +3,13 @@ pragma solidity ^0.8.24;
 
 import "./PolyLaunchToken.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import "./BondingCurve.sol";
 import "./LPLocker.sol";
 import "./interfaces/IUniswapV2Router.sol";
 import "./interfaces/IUniswapV2Factory.sol";
 
-contract PolyLaunchFactory {
+contract PolyLaunchFactory is ReentrancyGuard {
     address public owner;
     address public treasury;
 
@@ -18,7 +19,9 @@ IUniswapV2Factory public immutable factory;
 LPLocker public lpLocker;
 
 uint256 public constant LAUNCH_FEE = 4 * 1e6; // 4 USDC
-uint256 public constant GRADUATION_USDC = 100_000 * 1e6;
+uint256 public constant GRADUATION_USDC = 150 * 1e6;
+uint256 public constant CURVE_BPS = 8000; // 80%
+uint256 public constant LIQUIDITY_BPS = 2000; // 20%
 
 uint256 public totalProjects;
 
@@ -33,10 +36,11 @@ uint256 public totalProjects;
     bool active;
 
     uint256 reserveUSDC;
-    uint256 reserveTokens;
-    uint256 sold;
+uint256 reserveTokens;
+uint256 liquidityTokens;
+uint256 sold;
 
-    bool graduated;
+bool graduated;
 }
 
     mapping(uint256 => Project) public projects;
@@ -71,49 +75,70 @@ event ProjectGraduated(
 );
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
-        _;
-    }
+    require(msg.sender == owner, "Not owner");
+    _;
+}
+
+function transferOwnership(address newOwner) external onlyOwner {
+    require(newOwner != address(0), "Invalid owner");
+    owner = newOwner;
+}
+
+function setTreasury(address newTreasury) external onlyOwner {
+    require(newTreasury != address(0), "Invalid treasury");
+    treasury = newTreasury;
+}
 
     constructor(
     address _treasury,
     address _usdc,
     address _router,
     address _factory
-) {
+    ) {
+    require(_treasury != address(0), "Invalid treasury");
+    require(_usdc != address(0), "Invalid USDC");
+    require(_router != address(0), "Invalid router");
+    require(_factory != address(0), "Invalid factory");
+
     owner = msg.sender;
     treasury = _treasury;
     usdc = IERC20(_usdc);
-
     router = IUniswapV2Router(_router);
-factory = IUniswapV2Factory(_factory);
+    factory = IUniswapV2Factory(_factory);
 
-lpLocker = new LPLocker();
-
+    lpLocker = new LPLocker();
 }
 
     function createProject(
         string memory name,
         string memory symbol,
         uint256 totalSupply
-    ) external {
+    ) external nonReentrant {
         require(bytes(name).length > 0, "Invalid name");
         require(bytes(symbol).length > 0, "Invalid symbol");
         require(totalSupply > 0, "Invalid supply");
 
-        require(
-            usdc.transferFrom(msg.sender, treasury, LAUNCH_FEE),
-            "Launch fee payment failed"
-        );
+require(
+    usdc.transferFrom(msg.sender, treasury, LAUNCH_FEE),
+    "Launch fee payment failed"
+);
 
-        PolyLaunchToken token = new PolyLaunchToken(
-            name,
-            symbol,
-            totalSupply,
-            address(this)
-        );
+uint256 supply = totalSupply * 1e18;
 
-        totalProjects++;
+PolyLaunchToken token = new PolyLaunchToken(
+    name,
+    symbol,
+    supply,
+    address(this)
+);
+
+uint256 liquidityTokens =
+    (supply * LIQUIDITY_BPS) / 10000;
+
+uint256 curveTokens =
+    supply - liquidityTokens;
+
+totalProjects++;
 
         projects[totalProjects] = Project({
             id: totalProjects,
@@ -121,11 +146,12 @@ lpLocker = new LPLocker();
             token: address(token),
             name: name,
             symbol: symbol,
-            totalSupply: totalSupply,
+            totalSupply: supply,
             createdAt: block.timestamp,
             active: true,
 reserveUSDC: 0,
-reserveTokens: totalSupply,
+reserveTokens: curveTokens,
+liquidityTokens: liquidityTokens,
 sold: 0,
 graduated: false
         });
@@ -139,7 +165,7 @@ graduated: false
         );
     }
 
-function buy(uint256 projectId, uint256 amount) external {
+function buy(uint256 projectId, uint256 amount) external nonReentrant {
     require(projectId > 0 && projectId <= totalProjects, "Invalid project");
 
     Project storage project = projects[projectId];
@@ -159,41 +185,56 @@ function buy(uint256 projectId, uint256 amount) external {
     );
 
     project.reserveUSDC += cost;
-    project.reserveTokens -= amount;
-    project.sold += amount;
+project.reserveTokens -= amount;
+project.sold += amount;
+
+require(
+    IERC20(project.token).transfer(msg.sender, amount),
+    "Token transfer failed"
+);
+
 if (project.reserveUSDC >= GRADUATION_USDC) {
-    project.graduated = true;
-    project.active = false;
-
-    // existing addLiquidity() code
-
-    address pair = factory.getPair(project.token, address(usdc));
-
-    if (pair == address(0)) {
-        pair = factory.createPair(project.token, address(usdc));
-    }
-
-    emit ProjectGraduated(
-        projectId,
-        project.token,
-        project.reserveUSDC,
-        project.reserveTokens
-    );
-}
-    require(
-        IERC20(project.token).transfer(msg.sender, amount),
-        "Token transfer failed"
-    );
-
-    emit TokenPurchased(
-        projectId,
-        msg.sender,
-        amount,
-        cost
-    );
+    _graduateProject(projectId);
 }
 
-function sell(uint256 projectId, uint256 amount) external {
+emit TokenPurchased(
+    projectId,
+    msg.sender,
+    amount,
+    cost
+);
+}
+function getBuyQuote(
+    uint256 projectId,
+    uint256 amount
+) external view returns (uint256) {
+    require(projectId > 0 && projectId <= totalProjects, "Invalid project");
+
+    Project storage project = projects[projectId];
+
+    require(project.active, "Project inactive");
+    require(amount > 0, "Invalid amount");
+    require(project.reserveTokens >= amount, "Not enough tokens");
+
+    return BondingCurve.getBuyPrice(project.sold, amount);
+}
+
+function getSellQuote(
+    uint256 projectId,
+    uint256 amount
+) external view returns (uint256) {
+    require(projectId > 0 && projectId <= totalProjects, "Invalid project");
+
+    Project storage project = projects[projectId];
+
+    require(project.active, "Project inactive");
+    require(amount > 0, "Invalid amount");
+    require(project.sold >= amount, "Not enough sold");
+
+    return BondingCurve.getSellPrice(project.sold, amount);
+}
+
+function sell(uint256 projectId, uint256 amount) external nonReentrant {
     require(projectId > 0 && projectId <= totalProjects, "Invalid project");
 
     Project storage project = projects[projectId];
@@ -203,18 +244,23 @@ function sell(uint256 projectId, uint256 amount) external {
     require(project.sold >= amount, "Not enough sold");
 
     uint256 payout = BondingCurve.getSellPrice(
-        project.sold,
-        amount
-    );
+    project.sold,
+    amount
+);
 
-    require(
-        IERC20(project.token).transferFrom(
-            msg.sender,
-            address(this),
-            amount
-        ),
-        "Token transfer failed"
-    );
+require(
+    payout <= project.reserveUSDC,
+    "Insufficient reserve"
+);
+
+require(
+    IERC20(project.token).transferFrom(
+        msg.sender,
+        address(this),
+        amount
+    ),
+    "Token transfer failed"
+);
 
     require(
         usdc.transfer(msg.sender, payout),
@@ -231,47 +277,9 @@ emit TokenSold(
     amount,
     payout
 );
-} 
-
-function graduateProject(uint256 projectId) internal {
-    Project storage project = projects[projectId];
-
-    require(project.graduated, "Not graduated");
-
-   IERC20(project.token).approve(
-    address(router),
-    project.reserveTokens
-);
-
-usdc.approve(
-    address(router),
-    project.reserveUSDC
-);
-
-address lpRecipient = address(this);
-
-(uint amountToken, uint amountUSDC, uint liquidity) = router.addLiquidity(
-    project.token,
-    address(usdc),
-    project.reserveTokens,
-    project.reserveUSDC,
-    0,
-    0,
-    address(this),
-    block.timestamp
-);
-
-amountToken;
-amountUSDC;
-liquidity;
-
-emit ProjectGraduated(
-    projectId,
-    project.token,
-    project.reserveUSDC,
-    project.reserveTokens
-);
 }
+    
+   
 
 function getProject(uint256 projectId)
     external
@@ -283,28 +291,77 @@ function getProject(uint256 projectId)
 }
 
 function _graduateProject(uint256 projectId) internal {
+    Project storage project = projects[projectId];
 
-Project storage project = projects[projectId];
+    require(project.active, "Project inactive");
+    require(!project.graduated, "Already graduated");
+    require(project.reserveUSDC >= GRADUATION_USDC, "Target not reached");
 
-IERC20(project.token).approve(
-    address(router),
-    project.reserveTokens
-);
+    uint256 tokenAmount = project.liquidityTokens;
+    uint256 usdcAmount = project.reserveUSDC;
 
-usdc.approve(
-    address(router),
-    project.reserveUSDC
-);
+    require(tokenAmount > 0, "No liquidity tokens");
+    require(usdcAmount > 0, "No USDC");
 
-router.addLiquidity(
-    project.token,
-    address(usdc),
-    project.reserveTokens,
-    project.reserveUSDC,
-    0,
-    0,
-    address(this),
-    block.timestamp
-);
+    // Approve the DEX router to use the 20% liquidity allocation.
+    IERC20(project.token).approve(
+        address(router),
+        tokenAmount
+    );
+
+    // Approve the DEX router to use the accumulated USDC.
+    usdc.approve(
+        address(router),
+        usdcAmount
+    );
+
+    // Add the liquidity. LP tokens are sent directly to this factory.
+    (, , uint256 liquidity) = router.addLiquidity(
+        project.token,
+        address(usdc),
+        tokenAmount,
+        usdcAmount,
+        0,
+        0,
+        address(this),
+        block.timestamp
+    );
+
+    require(liquidity > 0, "No LP tokens");
+
+    // Find the LP token/pair created by the DEX.
+    address pair = factory.getPair(
+        project.token,
+        address(usdc)
+    );
+
+    require(pair != address(0), "Pair not found");
+
+    // Send LP tokens to the locker.
+    require(
+        IERC20(pair).transfer(
+            address(lpLocker),
+            liquidity
+        ),
+        "LP transfer failed"
+    );
+
+    // Lock LP tokens for one year.
+    lpLocker.lock(
+        pair,
+        liquidity,
+        block.timestamp + 365 days
+    );
+
+    // Finalize the project.
+    project.graduated = true;
+    project.active = false;
+
+    emit ProjectGraduated(
+        projectId,
+        project.token,
+        usdcAmount,
+        tokenAmount
+    );
 }
-}
+  }

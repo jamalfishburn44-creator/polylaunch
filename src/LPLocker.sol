@@ -14,16 +14,9 @@ contract LPLocker {
 
     mapping(address => Lock) public locks;
 
-    event LiquidityLocked(
-        address indexed lpToken,
-        uint256 amount,
-        uint256 unlockTime
-    );
+    event LiquidityLocked(address indexed lpToken, uint256 amount, uint256 unlockTime);
 
-    event LiquidityUnlocked(
-        address indexed lpToken,
-        uint256 amount
-    );
+    event LiquidityUnlocked(address indexed lpToken, uint256 amount);
 
     constructor() {
         factory = msg.sender;
@@ -34,32 +27,16 @@ contract LPLocker {
         _;
     }
 
-    function lock(
-        address lpToken,
-        uint256 amount,
-        uint256 unlockTime
-    ) external onlyFactory {
-
+    function lock(address lpToken, uint256 amount, uint256 unlockTime) external onlyFactory {
         require(amount > 0, "Zero amount");
         require(unlockTime > block.timestamp, "Invalid unlock");
 
-        locks[lpToken] = Lock({
-            amount: amount,
-            unlockTime: unlockTime,
-            claimed: false
-        });
+        locks[lpToken] = Lock({amount: amount, unlockTime: unlockTime, claimed: false});
 
-        emit LiquidityLocked(
-            lpToken,
-            amount,
-            unlockTime
-        );
+        emit LiquidityLocked(lpToken, amount, unlockTime);
     }
 
-    function unlock(address lpToken)
-        external
-        onlyFactory
-    {
+    function unlock(address lpToken) external onlyFactory {
         Lock storage info = locks[lpToken];
 
         require(!info.claimed, "Already unlocked");
@@ -67,25 +44,12 @@ contract LPLocker {
 
         info.claimed = true;
 
-        require(
-    IERC20(lpToken).transfer(
-        factory,
-        info.amount
-    ),
-    "LP transfer failed"
-);
+        require(IERC20(lpToken).transfer(factory, info.amount), "LP transfer failed");
 
-        emit LiquidityUnlocked(
-            lpToken,
-            info.amount
-        );
+        emit LiquidityUnlocked(lpToken, info.amount);
     }
 
-    function balanceOf(address lpToken)
-        external
-        view
-        returns (uint256)
-    {
+    function balanceOf(address lpToken) external view returns (uint256) {
         return IERC20(lpToken).balanceOf(address(this));
     }
 }

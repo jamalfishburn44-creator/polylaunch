@@ -7,12 +7,7 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 contract PolyLaunchToken is ERC20, Ownable {
     uint256 public immutable maxSupply;
 
-    constructor(
-        string memory name_,
-        string memory symbol_,
-        uint256 supply_,
-        address owner_
-    )
+    constructor(string memory name_, string memory symbol_, uint256 supply_, address owner_)
         ERC20(name_, symbol_)
         Ownable(owner_)
     {
