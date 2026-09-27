@@ -1,10 +1,13 @@
 import { BrowserProvider, Contract } from "ethers";
 
-export const FACTORY_ADDRESS = "PASTE_YOUR_FACTORY_CONTRACT_ADDRESS_HERE";
+export const FACTORY_ADDRESS =
+  "0xfebABcAe2580daF7164A139c9b44aa53E31087c9";
 
 export const FACTORY_ABI = [
-  "function createProject(string name,string symbol,uint256 totalSupply) payable",
-  "function launchFee() view returns (uint256)"
+  "function createProject(string name,string symbol,string metadataURI)",
+  "function totalProjects() view returns (uint256)",
+  "function treasury() view returns (address)",
+  "function usdc() view returns (address)"
 ];
 
 export async function getFactory() {

@@ -6,19 +6,16 @@ import "../src/PolyLaunchFactory.sol";
 
 contract Deploy is Script {
     function run() external {
-        vm.startBroadcast();
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+
+        vm.startBroadcast(deployerKey);
 
         address treasury = vm.envAddress("TREASURY");
         address usdc = vm.envAddress("USDC");
         address router = vm.envAddress("ROUTER");
         address factory = vm.envAddress("DEX_FACTORY");
 
-        new PolyLaunchFactory(
-            treasury,
-            usdc,
-            router,
-            factory
-        );
+        new PolyLaunchFactory(treasury, usdc, router, factory);
 
         vm.stopBroadcast();
     }

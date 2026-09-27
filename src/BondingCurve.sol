@@ -4,22 +4,12 @@ pragma solidity ^0.8.24;
 library BondingCurve {
     uint256 internal constant ONE = 1e6;
 
-    /*
-     * PolyLaunch V1
-     *
-     * Prices are denominated in USDC (6 decimals).
-     * Token amounts are ERC20 base units (18 decimals).
-     *
-     * The curve uses virtual reserves:
-     *
-     *     k = virtualUSDC * virtualTokens
-     *
-     * This gives us a smooth price curve instead of the old
-     * linear 1 USDC + 0.001 USDC/token model.
-     */
-
-    uint256 internal constant VIRTUAL_USDC = 1_000 * ONE;
-    uint256 internal constant VIRTUAL_TOKENS = 1_000_000 * 1e18;
+    // PolyLaunch V1 fixed token economics:
+    // 1,000,000,000 total tokens
+    // 800,000,000 tokens on the bonding curve
+    // 200,000,000 tokens reserved for graduation liquidity
+    uint256 internal constant VIRTUAL_USDC = 150 * ONE;
+    uint256 internal constant VIRTUAL_TOKENS = 800_000_000 * 1e18;
 
     function getBuyPrice(
         uint256 sold,
@@ -70,7 +60,10 @@ library BondingCurve {
             (VIRTUAL_USDC * VIRTUAL_TOKENS) /
             newVirtualTokens;
 
-        require(currentUSDC >= newUSDC, "Invalid curve");
+        require(
+            currentUSDC >= newUSDC,
+            "Invalid curve"
+        );
 
         return currentUSDC - newUSDC;
     }
@@ -87,8 +80,8 @@ library BondingCurve {
         );
 
         return
-    (VIRTUAL_USDC * 1e18) /
-    currentVirtualTokens;
+            (VIRTUAL_USDC * 1e36) /
+            currentVirtualTokens;
     }
 
     function getPrice(

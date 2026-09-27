@@ -2,8 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract LPLocker {
+    using SafeERC20 for IERC20;
     address public immutable factory;
 
     struct Lock {
@@ -44,7 +46,7 @@ contract LPLocker {
 
         info.claimed = true;
 
-        require(IERC20(lpToken).transfer(factory, info.amount), "LP transfer failed");
+        IERC20(lpToken).safeTransfer(factory, info.amount);
 
         emit LiquidityUnlocked(lpToken, info.amount);
     }
