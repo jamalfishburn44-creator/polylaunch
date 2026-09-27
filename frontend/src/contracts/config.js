@@ -1,0 +1,9 @@
+export const FACTORY_ADDRESS =
+  "0xfebABcAe2580daF7164A139c9b44aa53E31087c9";
+
+export const USDC_ADDRESS =
+  "0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582";
+
+export const CHAIN_ID = 80002;
+
+export const LAUNCH_FEE = 1_000_000;
