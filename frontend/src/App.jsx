@@ -54,10 +54,19 @@ export default function App() {
 
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
-  const [supply, setSupply] = useState("");
+  const [description, setDescription] = useState("");
+  const [website, setWebsite] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [discord, setDiscord] = useState("");
+  const [farcaster, setFarcaster] = useState("");
+  const [supply, setSupply] = useState("1000000000");
   const [metadataURI, setMetadataURI] = useState("");
+  const [tokenMetadata, setTokenMetadata] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [bannerFile, setBannerFile] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState("");
 
   const [launching, setLaunching] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,11 +80,11 @@ export default function App() {
 
   const { open } = useAppKit();
 
-  async function loadProjects() {
+  async function loadProjects(showLoading = false) {
     if (!publicClient) return;
 
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
 
       const total = await publicClient.readContract({
         address: FACTORY_ADDRESS,
@@ -133,7 +142,7 @@ export default function App() {
           (error.shortMessage || error.message)
       );
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
@@ -175,7 +184,7 @@ export default function App() {
   }, [selectedProject, publicClient]);
 
   useEffect(() => {
-    loadProjects();
+    loadProjects(true);
   }, [publicClient]);
   useEffect(() => {
     if (!publicClient) return;
@@ -193,8 +202,8 @@ export default function App() {
       return;
     }
 
-    if (!name.trim() || !symbol.trim() || !supply) {
-      setMessage("Enter a name, symbol, and supply.");
+    if (!name.trim() || !symbol.trim()) {
+      setMessage("Enter a token name and symbol.");
       return;
     }
 
@@ -251,6 +260,61 @@ export default function App() {
 
       const imageURI = imageResult.uri;
 
+      let bannerURI = "";
+
+      if (bannerFile) {
+        setMessage("Uploading banner image...");
+
+        const bannerFormData = new FormData();
+        bannerFormData.append("image", bannerFile);
+
+        const bannerController = new AbortController();
+        const bannerTimeout = setTimeout(
+          () => bannerController.abort(),
+          30000
+        );
+
+        let bannerResponse;
+
+        try {
+          bannerResponse = await fetch(
+            `http://${window.location.hostname}:3001/upload-image`,
+            {
+              method: "POST",
+              body: bannerFormData,
+              signal: bannerController.signal,
+            }
+          );
+        } catch (error) {
+          if (error.name === "AbortError") {
+            throw new Error(
+              "Banner upload timed out after 30 seconds."
+            );
+          }
+
+          throw new Error(
+            `Banner upload connection failed: ${error.message}`
+          );
+        } finally {
+          clearTimeout(bannerTimeout);
+        }
+
+        const bannerResult =
+          await bannerResponse.json();
+
+        if (
+          !bannerResponse.ok ||
+          !bannerResult.success
+        ) {
+          throw new Error(
+            bannerResult.error ||
+              "Banner upload failed"
+          );
+        }
+
+        bannerURI = bannerResult.uri;
+      }
+
       setMessage("Uploading token metadata...");
 
       const metadataResponse = await fetch(
@@ -263,8 +327,14 @@ export default function App() {
           body: JSON.stringify({
             name: name.trim(),
             symbol: symbol.trim(),
-            description: `${name.trim()} launched on PolyLaunch.`,
+            description: description.trim(),
             image: imageURI,
+            website: website.trim(),
+            twitter: twitter.trim(),
+            telegram: telegram.trim(),
+            discord: discord.trim(),
+            farcaster: farcaster.trim(),
+            banner: bannerURI,
           }),
         }
       );
@@ -337,10 +407,18 @@ export default function App() {
 
       setName("");
       setSymbol("");
-      setSupply("");
+      setDescription("");
+      setWebsite("");
+      setTwitter("");
+      setTelegram("");
+      setDiscord("");
+      setFarcaster("");
+      setSupply("1000000000");
       setMetadataURI("");
       setImageFile(null);
       setImagePreview("");
+      setBannerFile(null);
+      setBannerPreview("");
 
       await loadProjects();
     } catch (error) {
@@ -746,6 +824,44 @@ setMessage(
     )}...${value.slice(-4)}`;
   }
 
+  async function loadTokenMetadata(uri) {
+    if (!uri) {
+      setTokenMetadata(null);
+      return;
+    }
+
+    try {
+      const gatewayURI = uri.startsWith("ipfs://")
+        ? `https://gateway.pinata.cloud/ipfs/${uri.slice(7)}`
+        : uri;
+
+      const response = await fetch(gatewayURI);
+
+      if (!response.ok) {
+        throw new Error("Metadata request failed");
+      }
+
+      const metadata = await response.json();
+      setTokenMetadata(metadata);
+    } catch (error) {
+      console.error(
+        "Token metadata loading failed:",
+        error
+      );
+      setTokenMetadata(null);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedProject?.metadataURI) {
+      loadTokenMetadata(
+        selectedProject.metadataURI
+      );
+    } else {
+      setTokenMetadata(null);
+    }
+  }, [selectedProject]);
+
   if (selectedProject) {
     return (
       <div
@@ -783,6 +899,82 @@ setMessage(
           <h2>
             ${selectedProject.symbol}
           </h2>
+
+          {tokenMetadata?.banner && (
+            <img
+              src={
+                tokenMetadata.banner.startsWith("ipfs://")
+                  ? `https://gateway.pinata.cloud/ipfs/${tokenMetadata.banner.slice(7)}`
+                  : tokenMetadata.banner
+              }
+              alt={`${selectedProject.name} banner`}
+              style={{
+                width: "100%",
+                maxHeight: "240px",
+                objectFit: "cover",
+                borderRadius: "18px",
+                marginTop: "16px",
+              }}
+            />
+          )}
+
+          {tokenMetadata && (
+            <div
+              style={{
+                background: "#1e293b",
+                borderRadius: "16px",
+                padding: "20px",
+                marginTop: "20px",
+                textAlign: "left",
+              }}
+            >
+              {tokenMetadata.description && (
+                <p
+                  style={{
+                    fontSize: "17px",
+                    lineHeight: "1.6",
+                    marginTop: 0,
+                  }}
+                >
+                  {tokenMetadata.description}
+                </p>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                }}
+              >
+                {[
+                  ["🌐 Website", tokenMetadata.website],
+                  ["𝕏 X", tokenMetadata.twitter],
+                  ["✈️ Telegram", tokenMetadata.telegram],
+                  ["💬 Discord", tokenMetadata.discord],
+                  ["🟣 Farcaster", tokenMetadata.farcaster],
+                ]
+                  .filter(([, url]) => url)
+                  .map(([label, url]) => (
+                    <a
+                      key={label}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: "9px 13px",
+                        borderRadius: "10px",
+                        background: "#334155",
+                        color: "white",
+                        textDecoration: "none",
+                      }}
+                    >
+                      {label}
+                    </a>
+                  ))}
+              </div>
+            </div>
+          )}
 
           <div
             style={{
@@ -1271,6 +1463,18 @@ setMessage(
               marginBottom: "20px",
             }}
           >
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: "800",
+                letterSpacing: "1px",
+                opacity: 0.7,
+                marginBottom: "14px",
+              }}
+            >
+              TOKEN DETAILS
+            </div>
+
             <label
               style={{
                 display: "block",
@@ -1344,13 +1548,42 @@ setMessage(
             }}
           />
 
-          <input
-            placeholder="Total supply (example: 1000000000)"
-            value={supply}
+          <textarea
+            placeholder="Description"
+            value={description}
             onChange={(e) =>
-              setSupply(e.target.value)
+              setDescription(e.target.value)
             }
-            type="number"
+            rows={4}
+            style={{
+              width: "100%",
+              padding: "14px",
+              marginBottom: "12px",
+              boxSizing: "border-box",
+              resize: "vertical",
+            }}
+          />
+
+          <div
+            style={{
+              fontSize: "13px",
+              fontWeight: "800",
+              letterSpacing: "1px",
+              opacity: 0.7,
+              marginTop: "24px",
+              marginBottom: "14px",
+            }}
+          >
+            SOCIAL LINKS
+          </div>
+
+          <input
+            placeholder="Website (optional)"
+            value={website}
+            onChange={(e) =>
+              setWebsite(e.target.value)
+            }
+            type="url"
             style={{
               width: "100%",
               padding: "14px",
@@ -1358,6 +1591,168 @@ setMessage(
               boxSizing: "border-box",
             }}
           />
+
+          <input
+            placeholder="X / Twitter (optional)"
+            value={twitter}
+            onChange={(e) =>
+              setTwitter(e.target.value)
+            }
+            type="url"
+            style={{
+              width: "100%",
+              padding: "14px",
+              marginBottom: "12px",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            placeholder="Telegram (optional)"
+            value={telegram}
+            onChange={(e) =>
+              setTelegram(e.target.value)
+            }
+            type="url"
+            style={{
+              width: "100%",
+              padding: "14px",
+              marginBottom: "12px",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            placeholder="Discord (optional)"
+            value={discord}
+            onChange={(e) =>
+              setDiscord(e.target.value)
+            }
+            type="url"
+            style={{
+              width: "100%",
+              padding: "14px",
+              marginBottom: "12px",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <input
+            placeholder="Farcaster (optional)"
+            value={farcaster}
+            onChange={(e) =>
+              setFarcaster(e.target.value)
+            }
+            type="url"
+            style={{
+              width: "100%",
+              padding: "14px",
+              marginBottom: "12px",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <div
+            style={{
+              fontSize: "13px",
+              fontWeight: "800",
+              letterSpacing: "1px",
+              opacity: 0.7,
+              marginTop: "24px",
+              marginBottom: "14px",
+            }}
+          >
+            LAUNCH DETAILS
+          </div>
+
+          <div
+            style={{
+              background: "#0f172a",
+              padding: "14px",
+              borderRadius: "10px",
+              marginBottom: "12px",
+            }}
+          >
+            <strong>Total Supply</strong>
+            <div
+              style={{
+                marginTop: "6px",
+                fontSize: "18px",
+              }}
+            >
+              1,000,000,000 tokens
+            </div>
+            <small
+              style={{
+                opacity: 0.7,
+              }}
+            >
+              Fixed supply for PolyLaunch tokens
+            </small>
+          </div>
+
+          <div
+            style={{
+              fontSize: "13px",
+              fontWeight: "800",
+              letterSpacing: "1px",
+              opacity: 0.7,
+              marginTop: "24px",
+              marginBottom: "14px",
+            }}
+          >
+            BRANDING
+          </div>
+
+          <div
+            style={{
+              marginBottom: "20px",
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                marginBottom: "10px",
+                fontWeight: "bold",
+              }}
+            >
+              Banner Image — Optional
+            </label>
+
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={(e) => {
+                const file =
+                  e.target.files?.[0];
+
+                if (!file) return;
+
+                setBannerFile(file);
+                setBannerPreview(
+                  URL.createObjectURL(file)
+                );
+              }}
+              style={{
+                width: "100%",
+                marginBottom: "12px",
+              }}
+            />
+
+            {bannerPreview && (
+              <img
+                src={bannerPreview}
+                alt="Banner preview"
+                style={{
+                  width: "100%",
+                  maxHeight: "180px",
+                  objectFit: "cover",
+                  borderRadius: "12px",
+                  display: "block",
+                }}
+              />
+            )}
+          </div>
 
           <button
             onClick={launchProject}

@@ -51,3 +51,6 @@ ignition/deployments/chain-31337
 out/
 broadcast/
 cache/
+
+# Local backend
+backend/

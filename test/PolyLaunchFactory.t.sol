@@ -169,8 +169,31 @@ contract PolyLaunchFactoryTest is Test {
         // The bonding curve sold the purchased tokens.
         assertEq(afterBuy.sold, amount);
 
+        // The remaining bonding-curve allocation is 400M tokens.
+        assertEq(afterBuy.reserveTokens, 400_000_000 ether);
+
         // The 20% liquidity allocation remains defined.
         assertEq(afterBuy.liquidityTokens, 200_000_000 ether);
+
+        // The permanent token locker should hold all remaining curve tokens.
+        address tokenLocker = address(factory.tokenLocker());
+
+        assertEq(
+            IERC20(afterBuy.token).balanceOf(tokenLocker),
+            400_000_000 ether
+        );
+
+        (uint256 lockedTokens, bool permanentlyLocked) =
+            factory.tokenLocker().locks(afterBuy.token);
+
+        assertEq(lockedTokens, 400_000_000 ether);
+        assertTrue(permanentlyLocked);
+
+        // The Factory should retain no project tokens after graduation.
+        assertEq(
+            IERC20(afterBuy.token).balanceOf(address(factory)),
+            0
+        );
 
         // LP tokens should now belong to the locker.
         address locker = address(factory.lpLocker());

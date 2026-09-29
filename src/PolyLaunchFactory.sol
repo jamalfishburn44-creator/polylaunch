@@ -7,6 +7,7 @@ import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/Safe
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import "./BondingCurve.sol";
 import "./LPLocker.sol";
+import "./TokenLocker.sol";
 import "./interfaces/IUniswapV2Router.sol";
 import "./interfaces/IUniswapV2Factory.sol";
 
@@ -19,6 +20,7 @@ using SafeERC20 for IERC20;
     IUniswapV2Router public immutable router;
     IUniswapV2Factory public immutable factory;
     LPLocker public lpLocker;
+    TokenLocker public immutable tokenLocker;
 
     uint256 public constant LAUNCH_FEE = 1 * 1e6; // 1 USDC
 uint256 public constant TOTAL_SUPPLY = 1_000_000_000;
@@ -97,6 +99,7 @@ require(
         factory = IUniswapV2Factory(_factory);
 
         lpLocker = new LPLocker();
+        tokenLocker = new TokenLocker();
     }
 
     function createProject(
@@ -309,6 +312,21 @@ require(
 
         // Lock LP tokens for one year.
         lpLocker.lock(pair, liquidity, block.timestamp + 365 days);
+
+        // Permanently lock all remaining bonding-curve tokens.
+        uint256 remainingTokens = project.reserveTokens;
+
+        require(remainingTokens > 0, "No remaining tokens");
+
+        IERC20(project.token).forceApprove(
+            address(tokenLocker),
+            remainingTokens
+        );
+
+        tokenLocker.lock(
+            project.token,
+            remainingTokens
+        );
 
         // Finalize the project.
         project.graduated = true;
