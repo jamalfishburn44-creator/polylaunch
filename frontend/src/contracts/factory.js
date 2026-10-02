@@ -1,7 +1,7 @@
 import { BrowserProvider, Contract } from "ethers";
 
 export const FACTORY_ADDRESS =
-  "0xfebABcAe2580daF7164A139c9b44aa53E31087c9";
+  "0x3f34D9b50E36e426E7A880d676fB25dB56EF86ad";
 
 export const FACTORY_ABI = [
   "function createProject(string name,string symbol,string metadataURI)",
