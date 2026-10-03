@@ -7,3 +7,6 @@ export const USDC_ADDRESS =
 export const CHAIN_ID = 80002;
 
 export const LAUNCH_FEE = 1_000_000;
+
+export const ROUTER_ADDRESS =
+  "0x1AF405601CDCBAbA000c4D7A233d923cbfc083eC";
