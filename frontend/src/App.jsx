@@ -1623,6 +1623,28 @@ setMessage(
                         ? selectedProject.symbol
                         : "USDC"}
                     </div>
+
+                    {selectedProject.graduated && (
+                      <div
+                        style={{
+                          marginTop: "10px",
+                          fontSize: "14px",
+                          color: "#94a3b8",
+                        }}
+                      >
+                        Minimum received (1% slippage):{" "}
+                        {tradeMode === "buy"
+                          ? formatTokenAmount(
+                              (tradeQuote * 99n) / 100n
+                            )
+                          : formatUSDC(
+                              (tradeQuote * 99n) / 100n
+                            )}{" "}
+                        {tradeMode === "buy"
+                          ? selectedProject.symbol
+                          : "USDC"}
+                      </div>
+                    )}
                   </div>
                 )}
 
