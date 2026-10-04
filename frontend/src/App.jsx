@@ -519,18 +519,19 @@ export default function App() {
       setLoadingQuote(true);
 
       if (!graduated) {
-        const quote = await publicClient.readContract({
-          address: FACTORY_ADDRESS,
-          abi: factoryAbi,
-          functionName:
-            tradeMode === "buy"
-              ? "getBuyQuote"
-              : "getSellQuote",
-          args: [
-            BigInt(selectedProject.id),
-            amount,
-          ],
-        });
+        const quote =
+          await publicClient.readContract({
+            address: FACTORY_ADDRESS,
+            abi: factoryAbi,
+            functionName:
+              tradeMode === "buy"
+                ? "getBuyQuote"
+                : "getSellQuote",
+            args: [
+              BigInt(selectedProject.id),
+              amount,
+            ],
+          });
 
         setTradeQuote(quote);
         return;
@@ -602,9 +603,17 @@ export default function App() {
       });
 
       setTradeQuote(quote);
+      setMessage("");
     } catch (error) {
       console.error("Quote error:", error);
       setTradeQuote(null);
+      setMessage(
+        `Quote error: ${
+          error?.shortMessage ||
+          error?.message ||
+          String(error)
+        }`
+      );
     } finally {
       setLoadingQuote(false);
     }
@@ -647,6 +656,17 @@ export default function App() {
     }
 
     if (!selectedProject) {
+      return;
+    }
+
+    const amount = parseTokenAmount(
+      tradeAmount
+    );
+
+    if (amount === null || amount <= 0n) {
+      setMessage(
+        "Enter a whole-number token amount."
+      );
       return;
     }
 
@@ -722,18 +742,17 @@ export default function App() {
             ? reserve0
             : reserve1;
 
-        const quote =
-          await publicClient.readContract({
-            address: ROUTER_ADDRESS,
-            abi: routerAbi,
-            functionName: "getAmountOutForPair",
-            args: [
-              pair,
-              amount,
-              reserveIn,
-              reserveOut,
-            ],
-          });
+        const quote = await publicClient.readContract({
+          address: ROUTER_ADDRESS,
+          abi: routerAbi,
+          functionName: "getAmountOutForPair",
+          args: [
+            pair,
+            amount,
+            reserveIn,
+            reserveOut,
+          ],
+        });
 
         if (quote <= 0n) {
           throw new Error(
@@ -848,207 +867,285 @@ export default function App() {
             ? `✅ Bought approximately ${formatTokenAmount(quote)} ${selectedProject.symbol}`
             : `✅ Sold ${formatTokenAmount(amount)} ${selectedProject.symbol} for approximately ${formatUSDC(quote)} USDC`
         );
-      } else {
-        const amount = parseTokenAmount(
-          tradeAmount
+
+        setTradeAmount("");
+        setTradeQuote(null);
+        await loadProjects();
+        return;
+      }
+
+      if (tradeMode === "buy") {
+        setMessage("Getting buy quote...");
+
+        const cost =
+          await publicClient.readContract({
+            address: FACTORY_ADDRESS,
+            abi: factoryAbi,
+            functionName: "getBuyQuote",
+            args: [
+              BigInt(selectedProject.id),
+              amount,
+            ],
+          });
+
+        const usdcBalance =
+          await publicClient.readContract({
+            address: USDC_ADDRESS,
+            abi: usdcAbi,
+            functionName: "balanceOf",
+            args: [address],
+          });
+
+        if (usdcBalance < cost) {
+          throw new Error(
+            `Insufficient USDC. Need ${formatUSDC(
+              cost
+            )} USDC.`
+          );
+        }
+
+        const allowance =
+          await publicClient.readContract({
+            address: USDC_ADDRESS,
+            abi: usdcAbi,
+            functionName: "allowance",
+            args: [
+              address,
+              FACTORY_ADDRESS,
+            ],
+          });
+
+        if (allowance < cost) {
+          setMessage(
+            "Approving USDC for this trade..."
+          );
+
+          const approveHash =
+            await walletClient.writeContract({
+              address: USDC_ADDRESS,
+              abi: usdcAbi,
+              functionName: "approve",
+              args: [
+                FACTORY_ADDRESS,
+                cost,
+              ],
+              ...GAS_SETTINGS,
+            });
+
+          await publicClient.waitForTransactionReceipt({
+            hash: approveHash,
+          });
+        }
+
+        setMessage(
+          `Buying ${formatTokenAmount(
+            amount
+          )} ${selectedProject.symbol}...`
         );
 
-        if (amount === null || amount <= 0n) {
-          setMessage(
-            "Enter a whole-number token amount."
+        const hash =
+          await walletClient.writeContract({
+            address: FACTORY_ADDRESS,
+            abi: factoryAbi,
+            functionName: "buy",
+            args: [
+              BigInt(selectedProject.id),
+              amount,
+            ],
+                        ...GAS_SETTINGS,
+          });
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+  hash,
+});
+
+if (receipt.status !== "success") {
+  throw new Error(
+    `Buy transaction reverted. Tx: ${hash}`
+  );
+}
+
+setMessage(
+  `✅ Bought ${formatTokenAmount(
+    amount
+  )} ${selectedProject.symbol}`
+);
+      } else {
+        if (amount > tokenBalance) {
+          throw new Error(
+            `Insufficient ${selectedProject.symbol} balance.`
           );
-          return;
         }
 
-        if (tradeMode === "buy") {
-          setMessage("Getting buy quote...");
+        setMessage("Getting sell quote...");
 
-          const cost =
-            await publicClient.readContract({
-              address: FACTORY_ADDRESS,
-              abi: factoryAbi,
-              functionName: "getBuyQuote",
-              args: [
-                BigInt(selectedProject.id),
-                amount,
-              ],
-            });
+        const payout =
+          await publicClient.readContract({
+            address: FACTORY_ADDRESS,
+            abi: factoryAbi,
+            functionName: "getSellQuote",
+            args: [
+              BigInt(selectedProject.id),
+              amount,
+            ],
+          });
 
-          const usdcBalance =
-            await publicClient.readContract({
-              address: USDC_ADDRESS,
-              abi: usdcAbi,
-              functionName: "balanceOf",
-              args: [address],
-            });
+        const allowance =
+          await publicClient.readContract({
+            address: selectedProject.token,
+            abi: tokenAbi,
+            functionName: "allowance",
+            args: [
+              address,
+              FACTORY_ADDRESS,
+            ],
+          });
 
-          if (usdcBalance < cost) {
-            throw new Error(
-              `Insufficient USDC. Need ${formatUSDC(cost)} USDC.`
-            );
-          }
-
-          const allowance =
-            await publicClient.readContract({
-              address: USDC_ADDRESS,
-              abi: usdcAbi,
-              functionName: "allowance",
-              args: [
-                address,
-                FACTORY_ADDRESS,
-              ],
-            });
-
-          if (allowance < cost) {
-            setMessage(
-              "Approving USDC for this trade..."
-            );
-
-            const approveHash =
-              await walletClient.writeContract({
-                address: USDC_ADDRESS,
-                abi: usdcAbi,
-                functionName: "approve",
-                args: [
-                  FACTORY_ADDRESS,
-                  cost,
-                ],
-                ...GAS_SETTINGS,
-              });
-
-            await publicClient.waitForTransactionReceipt({
-              hash: approveHash,
-            });
-          }
-
+        if (allowance < amount) {
           setMessage(
-            `Buying ${formatTokenAmount(amount)} ${selectedProject.symbol}...`
+            `Approving ${selectedProject.symbol} for sale...`
           );
 
-          const hash =
+          const approveHash =
             await walletClient.writeContract({
-              address: FACTORY_ADDRESS,
-              abi: factoryAbi,
-              functionName: "buy",
-              args: [
-                BigInt(selectedProject.id),
-                amount,
-              ],
-              ...GAS_SETTINGS,
-            });
-
-          const receipt =
-            await publicClient.waitForTransactionReceipt({
-              hash,
-            });
-
-          if (receipt.status !== "success") {
-            throw new Error(
-              `Buy transaction reverted. Tx: ${hash}`
-            );
-          }
-
-          setMessage(
-            `✅ Bought ${formatTokenAmount(amount)} ${selectedProject.symbol}`
-          );
-        } else {
-          if (amount > tokenBalance) {
-            throw new Error(
-              `Insufficient ${selectedProject.symbol} balance.`
-            );
-          }
-
-          setMessage("Getting sell quote...");
-
-          const payout =
-            await publicClient.readContract({
-              address: FACTORY_ADDRESS,
-              abi: factoryAbi,
-              functionName: "getSellQuote",
-              args: [
-                BigInt(selectedProject.id),
-                amount,
-              ],
-            });
-
-          const allowance =
-            await publicClient.readContract({
               address: selectedProject.token,
               abi: tokenAbi,
-              functionName: "allowance",
+              functionName: "approve",
               args: [
-                address,
                 FACTORY_ADDRESS,
-              ],
-            });
-
-          if (allowance < amount) {
-            setMessage(
-              `Approving ${selectedProject.symbol} for sale...`
-            );
-
-            const approveHash =
-              await walletClient.writeContract({
-                address: selectedProject.token,
-                abi: tokenAbi,
-                functionName: "approve",
-                args: [
-                  FACTORY_ADDRESS,
-                  amount,
-                ],
-                ...GAS_SETTINGS,
-              });
-
-            await publicClient.waitForTransactionReceipt({
-              hash: approveHash,
-            });
-          }
-
-          setMessage(
-            `Selling ${formatTokenAmount(amount)} ${selectedProject.symbol}...`
-          );
-
-          const hash =
-            await walletClient.writeContract({
-              address: FACTORY_ADDRESS,
-              abi: factoryAbi,
-              functionName: "sell",
-              args: [
-                BigInt(selectedProject.id),
                 amount,
               ],
               ...GAS_SETTINGS,
             });
 
-          const receipt =
-            await publicClient.waitForTransactionReceipt({
-              hash,
-            });
-
-          if (receipt.status !== "success") {
-            throw new Error(
-              `Sell transaction reverted. Tx: ${hash}`
-            );
-          }
-
-          setMessage(
-            `✅ Sold ${formatTokenAmount(amount)} ${selectedProject.symbol} for ${formatUSDC(payout)} USDC`
-          );
+          await publicClient.waitForTransactionReceipt({
+            hash: approveHash,
+          });
         }
+
+        setMessage(
+          `Selling ${formatTokenAmount(
+            amount
+          )} ${selectedProject.symbol}...`
+        );
+
+        const hash =
+          await walletClient.writeContract({
+            address: FACTORY_ADDRESS,
+            abi: factoryAbi,
+            functionName: "sell",
+            args: [
+              BigInt(selectedProject.id),
+              amount,
+            ],
+            ...GAS_SETTINGS,
+          });
+
+        await publicClient.waitForTransactionReceipt({
+          hash,
+        });
+
+        setMessage(
+          `✅ Sold ${formatTokenAmount(
+            amount
+          )} ${selectedProject.symbol} for ${formatUSDC(
+            payout
+          )} USDC`
+        );
       }
 
       setTradeAmount("");
       setTradeQuote(null);
+
       await loadProjects();
+
+      const refreshedProject =
+        await publicClient.readContract({
+          address: FACTORY_ADDRESS,
+          abi: factoryAbi,
+          functionName: "getProject",
+          args: [
+            BigInt(selectedProject.id),
+          ],
+        });
+
+      const updatedProject = {
+        id: refreshedProject.id.toString(),
+        creator: refreshedProject.creator,
+        token: refreshedProject.token,
+        name: refreshedProject.name,
+        symbol: refreshedProject.symbol,
+        metadataURI:
+          refreshedProject.metadataURI,
+        totalSupply:
+          refreshedProject.totalSupply.toString(),
+        createdAt:
+          refreshedProject.createdAt.toString(),
+        active: refreshedProject.active,
+        reserveUSDC:
+          refreshedProject.reserveUSDC.toString(),
+        reserveTokens:
+          refreshedProject.reserveTokens.toString(),
+        liquidityTokens:
+          refreshedProject.liquidityTokens.toString(),
+        sold: refreshedProject.sold.toString(),
+        graduated:
+          refreshedProject.graduated,
+      };
+
+      setSelectedProject(updatedProject);
+
+      await loadTradingData(updatedProject);
     } catch (error) {
-      console.error("Trade error:", error);
+      console.error(
+        "Trade error:",
+        error
+      );
+
       setMessage(
-        error?.shortMessage ||
-          error?.message ||
-          "Trade failed."
+        "Trade failed: " +
+          (error.shortMessage ||
+            error.message)
       );
     } finally {
       setTrading(false);
+    }
+  }
+
+  function shortenAddress(value) {
+    if (!value) return "";
+
+    return `${value.slice(
+      0,
+      6
+    )}...${value.slice(-4)}`;
+  }
+
+  async function loadTokenMetadata(uri) {
+    if (!uri) {
+      setTokenMetadata(null);
+      return;
+    }
+
+    try {
+      const gatewayURI = uri.startsWith("ipfs://")
+        ? `https://gateway.pinata.cloud/ipfs/${uri.slice(7)}`
+        : uri;
+
+      const response = await fetch(gatewayURI);
+
+      if (!response.ok) {
+        throw new Error("Metadata request failed");
+      }
+
+      const metadata = await response.json();
+      setTokenMetadata(metadata);
+    } catch (error) {
+      console.error(
+        "Token metadata loading failed:",
+        error
+      );
+      setTokenMetadata(null);
     }
   }
 
@@ -1452,14 +1549,20 @@ export default function App() {
                     fontWeight: "bold",
                   }}
                 >
-                  Token amount
+                  {tradeMode === "buy"
+                    ? "USDC amount"
+                    : `${selectedProject.symbol} amount`}
                 </label>
 
                 <input
                   type="number"
                   min="1"
                   step="1"
-                  placeholder={`Amount of ${selectedProject.symbol}`}
+                  placeholder={
+                    tradeMode === "buy"
+                      ? "Amount of USDC"
+                      : `Amount of ${selectedProject.symbol}`
+                  }
                   value={tradeAmount}
                   onChange={(e) =>
                     setTradeAmount(
@@ -1502,7 +1605,7 @@ export default function App() {
                   >
                     <strong>
                       {tradeMode === "buy"
-                        ? "You pay"
+                        ? "You receive"
                         : "You receive"}
                     </strong>
 
@@ -1513,10 +1616,12 @@ export default function App() {
                         marginTop: "5px",
                       }}
                     >
-                      {formatUSDC(
-                        tradeQuote
-                      )}{" "}
-                      USDC
+                      {tradeMode === "buy"
+                        ? formatTokenAmount(tradeQuote)
+                        : formatUSDC(tradeQuote)}{" "}
+                      {tradeMode === "buy"
+                        ? selectedProject.symbol
+                        : "USDC"}
                     </div>
                   </div>
                 )}
