@@ -1484,6 +1484,20 @@ setMessage(
                     </p>
 
                     <p style={{ marginBottom: "8px" }}>
+                      1,000,000 {selectedProject.symbol}:{" "}
+                      {dexPrice !== null
+                        ? (dexPrice * 1_000_000).toLocaleString(
+                            undefined,
+                            {
+                              minimumFractionDigits: 4,
+                              maximumFractionDigits: 6,
+                            }
+                          )
+                        : "—"}{" "}
+                      USDC
+                    </p>
+
+                    <p style={{ marginBottom: "8px" }}>
                       USDC liquidity:{" "}
                       {formatUSDC(dexReserves.usdc)} USDC
                     </p>
