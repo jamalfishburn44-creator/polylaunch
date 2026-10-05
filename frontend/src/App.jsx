@@ -53,6 +53,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
   const [dexPair, setDexPair] = useState(null);
+  const [dexReserves, setDexReserves] = useState(null);
+  const [dexPrice, setDexPrice] = useState(null);
   const [loadingDexPair, setLoadingDexPair] = useState(false);
 
   const [name, setName] = useState("");
@@ -165,11 +167,59 @@ export default function App() {
       const zeroAddress =
         "0x0000000000000000000000000000000000000000";
 
-      setDexPair(
+      if (
         pair.toLowerCase() === zeroAddress
-          ? null
-          : pair
-      );
+      ) {
+        setDexPair(null);
+        setDexReserves(null);
+        setDexPrice(null);
+        return;
+      }
+
+      setDexPair(pair);
+
+      const token0 = await publicClient.readContract({
+        address: pair,
+        abi: pairAbi,
+        functionName: "token0",
+      });
+
+      const reserves = await publicClient.readContract({
+        address: pair,
+        abi: pairAbi,
+        functionName: "getReserves",
+      });
+
+      const reserve0 = reserves[0];
+      const reserve1 = reserves[1];
+
+      const usdcIsToken0 =
+        token0.toLowerCase() ===
+        USDC_ADDRESS.toLowerCase();
+
+      const usdcReserve = usdcIsToken0
+        ? reserve0
+        : reserve1;
+
+      const tokenReserve = usdcIsToken0
+        ? reserve1
+        : reserve0;
+
+      setDexReserves({
+        usdc: usdcReserve,
+        token: tokenReserve,
+      });
+
+      if (tokenReserve > 0n) {
+        const price =
+          Number(usdcReserve) /
+          10 ** USDC_DECIMALS /
+          (Number(tokenReserve) / 10 ** 18);
+
+        setDexPrice(price);
+      } else {
+        setDexPrice(null);
+      }
     } catch (error) {
       console.error("DEX pair lookup failed:", error);
       setDexPair(null);
@@ -1410,6 +1460,40 @@ setMessage(
                 <p>
                   🔄 Trading continues through the DEX liquidity pool.
                 </p>
+
+                {dexReserves && (
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      padding: "14px",
+                      borderRadius: "10px",
+                      background: "#0f172a",
+                    }}
+                  >
+                    <strong>DEX Market</strong>
+
+                    <p style={{ marginBottom: "8px" }}>
+                      Price:{" "}
+                      {dexPrice !== null
+                        ? dexPrice.toLocaleString(undefined, {
+                            minimumFractionDigits: 8,
+                            maximumFractionDigits: 12,
+                          })
+                        : "—"}{" "}
+                      USDC per {selectedProject.symbol}
+                    </p>
+
+                    <p style={{ marginBottom: "8px" }}>
+                      USDC liquidity:{" "}
+                      {formatUSDC(dexReserves.usdc)} USDC
+                    </p>
+
+                    <p style={{ marginBottom: 0 }}>
+                      {selectedProject.symbol} liquidity:{" "}
+                      {formatTokenAmount(dexReserves.token)}
+                    </p>
+                  </div>
+                )}
 
                 <div
                   style={{
